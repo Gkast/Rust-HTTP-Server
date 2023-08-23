@@ -8,8 +8,10 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 
+// Define a function type for handlers
 type HandlerFn = fn(&str) -> (String, &'static str, u16);
 
+// HTML template for generating responses
 const HTML_TEMPLATE: &str = r#"
 <!DOCTYPE html>
 <html>
@@ -22,6 +24,7 @@ const HTML_TEMPLATE: &str = r#"
 </html>
 "#;
 
+// Create a response tuple
 fn create_response(title: &str, content: &str, status_code: u16) -> (String, &'static str, u16) {
     let response_content = HTML_TEMPLATE
         .replace("{title}", title)
@@ -30,6 +33,7 @@ fn create_response(title: &str, content: &str, status_code: u16) -> (String, &'s
     (response_content, "text/html", status_code)
 }
 
+// Handlers for specific routes
 fn handle_hello(_: &str) -> (String, &'static str, u16) {
     create_response("Hello Page", "Hello, Rust HTTP Server!", 200)
 }
@@ -46,6 +50,7 @@ fn handle_not_found(_: &str) -> (String, &'static str, u16) {
     create_response("404 - Not Found", "Not Found", 404)
 }
 
+// Handle client request
 fn handle_client(
     mut stream: TcpStream,
     routes: Arc<HashMap<(&'static str, Method), HandlerFn>>,
@@ -66,13 +71,16 @@ fn handle_client(
         return Ok(());
     }
 
+    // Extract HTTP method and path
     let http_method =
         Method::from_bytes(parsed_request.method.unwrap().as_bytes()).expect("Invalid HTTP method");
     let path = Cow::Borrowed(parsed_request.path.unwrap());
 
+    // Find and call the appropriate handler for the request
     let (response_content, content_type, status_code) = find_handler(&path, http_method, &routes)
         .map_or_else(|| handle_not_found(&request), |handler| handler(&request));
 
+    // Construct and send the response
     let response = format!(
         "HTTP/1.1 {}\r\nContent-Length: {}\r\nContent-Type: {}\r\n\r\n{}",
         status_code,
@@ -92,6 +100,7 @@ fn handle_client(
     Ok(())
 }
 
+// Find the appropriate handler for a given route and HTTP method
 fn find_handler<'a>(
     path: &str,
     method: Method,
@@ -100,11 +109,15 @@ fn find_handler<'a>(
     routes.get(&(path, method)).copied()
 }
 
+// Main entry point of the application
 fn main() -> Result<(), Box<dyn Error>> {
+    // Initialize the logger
     env_logger::init();
 
+    // Bind to the listener address
     let listener = TcpListener::bind("127.0.0.1:8080")?;
 
+    // Create the routes and handlers
     let routes: Arc<HashMap<(&str, Method), HandlerFn>> = Arc::new({
         let mut routes: HashMap<(&str, Method), HandlerFn> = HashMap::new();
         routes.insert(("/hello", Method::GET), handle_hello);
@@ -113,6 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         routes
     });
 
+    // Listen for incoming connections and handle them concurrently
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
